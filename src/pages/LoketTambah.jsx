@@ -1,0 +1,329 @@
+import Cleave from "cleave.js/react";
+import { format } from "date-fns";
+import { cloneDeep } from "lodash";
+import React, { useContext, useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import { AppContext } from "../App";
+import { AppBar } from "../components/AppBar";
+import { ButtonBlock } from "../components/ButtonBlock";
+import { IconButton } from "../components/IconButton";
+import { LoadingOverlay } from "../components/Loading";
+import { Modal } from "../components/Modal";
+import { RadioButton } from "../components/RadioButton";
+import { SaveCancelBtnBlock } from "../components/SaveCancelBtnBlock";
+import { SelectAsync } from "../components/SelectAsync";
+import { CLASS_FIELD_LABEL, CLASS_FIELD_LABEL_ERROR, CLASS_TEXTFIELD, CLASS_TEXTFIELD_ERROR } from "../constants/Styles";
+import { routes } from "../constants/Urls";
+import { DatePicker } from "../components/DatePicker";
+import { SelectSimple } from "../components/SelectSimple";
+import { getLoketEdit, saveLoket, getManusiaLoketList, getLayanan } from "../apis/Loket";
+import { listDokterByKelamin } from "../apis/Layanan";
+import { getMasterPembayaran, getMasterMitra, getMasterRujukan, getMasterKeperluan } from "../apis/Master";
+
+const loketModel = {
+    kun_yan_id:"",
+    kun_man_id:"",
+    kun_status:"",
+    kun_noregistrasi:"",
+    kun_tgcheckin:"",
+    kun_noantrian:"",
+    kun_dokter_sdm_id:"",
+    kun_keperluan:"",
+    kun_pembayaran:"",
+    kun_mitra:"",
+    kun_noasuransi:"",
+    kun_rujukan:"",
+    man_nama:"",
+};
+
+export const LoketTambah = () => {
+    const {user,config} = useContext(AppContext);
+    const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [loket, setLoket] = useState(cloneDeep(loketModel));
+    const [canSave, setCanSave] = useState(false);
+    const [dataPasien, setDataPasien] = useState(null);
+    const [layananList, setLayananList] = useState([]);
+    const [radio, setRadio]=useState(false)
+    const [listDokter, setListDokter]=useState([])
+    const [pembayaranList, setPembayaranList] = useState([]);
+    const [mitraList, setMitraList] = useState([]);
+    const [keperluanList, setKeperluanList] = useState([]);
+    const [rujukanList, setRujukanList] = useState([]);
+    const [emptyFields, setEmptyFields] = useState([]);
+
+    const updateData = (key, value) => {
+        setLoket({
+            ...cloneDeep(loket), [key]: value
+        });
+        setCanSave(true);
+    } //mengganti data dari data yang sudah ada
+    ////////////////////dropdown nama pasien////////////////////
+    const updateDataPasien = ({label, value}) => {
+        setDataPasien({label,value});
+        updateData("kun_man_id", value);
+    }
+
+    const searchPasien = ({keyword, onLoaded})=>getManusiaLoketList({
+        man_com_id: config.com_id,
+        q: keyword,
+        onSuccess: onLoaded
+    });
+    /////////////////////////use effect untuk dokter sesuai jenis kelamin///////////////////////////////////
+    useEffect(()=>{
+        if(loket){
+            if(radio){
+                listDokterByKelamin({
+                    kelamin:loket.man_kelamin,
+                    com_id:user.currentLocation.com_id,
+                    onSuccess: (savedData)=>{
+                        savedData==null ? setListDokter([]) : setListDokter(savedData);
+                        setLoading(false);
+                    },
+                })
+            }
+            else{
+                listDokterByKelamin({
+                    kelamin:null,
+                    com_id:user.currentLocation.com_id,
+                    onSuccess: (savedData)=>{
+                        savedData==null ? setListDokter([]) : setListDokter(savedData);
+                        setLoading(false);
+                    },
+                })
+            }
+        }
+    },[radio])
+
+    useEffect(()=>{
+        setLoading(true);
+        Promise.all([
+            getLayanan({onSuccess: setLayananList, lok_id: user.currentLocation.lok_id}),
+            getMasterPembayaran({onSuccess: setPembayaranList}),
+            getMasterRujukan({onSuccess: setRujukanList}),
+            getMasterKeperluan({onSuccess: setKeperluanList}),
+            getMasterMitra({onSuccess: setMitraList})
+        ]).then(()=>{
+            console.log(layananList)
+            setLoading(false);
+        });
+    },[]); //load semua dropdownlist yang bukan search
+
+    // useEffect(()=>{
+    //     if(loket && (loket.man_nama || loket.kun_man_id)){
+    //         setDataPasien({label:loket.man_nama, value:loket.kun_man_id});
+    //     }
+    // },[JSON.stringify(loket)]);
+    
+
+    const handleSave = (data) => {
+        setLoading(true);
+        if(data.kun_man_id && data.kun_yan_id)
+            saveLoket({
+                lok_id:user.currentLocation.lok_id,
+                kun_id:'0',
+                ...data,
+                onSuccess: (savedData)=>{
+                    setLoket(savedData);
+                    navigate(routes.loket);
+                },
+                onError: (err)=>{
+                    window.pushToast(err, "error");
+                    setLoading(false);
+                }
+            });
+        else{
+            window.pushToast("Kolom klinik dan kolom nama pasien tidak boleh kosong");
+            setLoading(false);
+        }
+    }
+
+    return (<div>
+        <div className="h-screen bg-gray-50 overflow-auto">
+            <AppBar bgColor="bg-lime-500" bgHoverColor="hover:bg-lime-600"
+                backIcon="IoChevronBackOutline"
+                onBackClick={()=>navigate(routes.loket)}
+            >
+                Loket Tambah
+            </AppBar>
+            <div className="py-20 px-4">     
+                <div className="mb-5 text-xl font-bold">Pengisian Loket</div>
+                <div className="flex space-x-4">
+                    <div className="mb-5">  
+                        <div className={CLASS_FIELD_LABEL}>
+                            ID
+                        </div>
+                        <div className="relative">
+                            <Cleave type="text" className={CLASS_TEXTFIELD}
+                                value="auto"
+                                rows={5}
+                                disabled={true}
+                            />
+                        </div>
+                    </div>   
+                    <div className="mb-5"></div>
+                </div>
+                <div className="flex space-x-4">
+                    <div className="mb-5">  
+                        <div className={CLASS_FIELD_LABEL}>
+                            No Registrasi
+                        </div>
+                        <div className="relative">
+                            <Cleave type="text" className={CLASS_TEXTFIELD}
+                                value="auto"
+                                rows={5}
+                                disabled={true}
+                            />
+                        </div>
+                    </div>   
+                    <div className="mb-5">
+                        <div className={CLASS_FIELD_LABEL}>
+                            Status
+                        </div>
+                        <div className="relative">
+                            <Cleave type="text" className={CLASS_TEXTFIELD}
+                                value="auto"
+                                rows={5}
+                                disabled={true}
+                            />
+                        </div>
+                    </div>
+                </div>
+                <div className="mb-5">
+                    <div className={
+                        emptyFields.includes("kun_yan_id")?CLASS_FIELD_LABEL_ERROR :CLASS_FIELD_LABEL}>
+                        Layanan (Klinik)
+                    </div>
+                    <SelectSimple
+                        onChange={(obj)=>updateData("kun_yan_id", obj.value)}
+                        selected={layananList.find(s=>s.value === loket.kun_yan_id)}
+                        options={layananList}
+                    />
+                </div>
+                <div className="mb-5">
+                    <div className={
+                        emptyFields.includes("kun_man_id")?CLASS_FIELD_LABEL_ERROR :CLASS_FIELD_LABEL}>
+                        Nama Pasien
+                    </div>
+                    <SelectAsync
+                        placeholder="Ketik 3 huruf untuk mencari..."
+                        onLoad={searchPasien}
+                        onChange={updateDataPasien}
+                        selected={dataPasien}
+                    />
+                </div>
+                <div className="mb-5">
+                        <div className={CLASS_FIELD_LABEL}>
+                            Tanggal Check In
+                        </div>
+                        <div className="relative">
+                            <DatePicker
+                                dateValue={null}
+                                onDateChange={(date)=>updateData("kun_tgcheckin",date)}
+                            />
+                        </div>
+                    </div>
+                <div className="mb-5">
+                    <div className={CLASS_FIELD_LABEL}>
+                        No Antrian
+                    </div>
+                    <div className="relative">
+                        <Cleave type="text" className={CLASS_TEXTFIELD}
+                            onChange={(e)=>updateData("kun_noantrian", e.target.value)}
+                            value={loket.kun_noantrian}
+                            rows={5}
+                        />
+                    </div>
+                </div>
+                <div className="mb-12">
+                    <div className={CLASS_FIELD_LABEL}>
+                        Dokter/DPJP
+                    </div>
+                    <div className="relative">
+                        <SelectSimple
+                            onChange={(obj)=>updateData("kun_dokter_sdm_id", obj.value)}
+                            selected={listDokter.find(s=>s.value === loket.kun_dokter_sdm_id)}
+                            options={listDokter}
+                        />
+                    </div>
+                    <div className="py-3 flex space-x-4">
+                        <div className="mb-5">
+                            <RadioButton
+                            checkedColor={"checked:bg-lime-500"}
+                            borderColor={"border-lime-500"}
+                            onClick={()=>setRadio(!radio)}
+                            isChecked={radio}/>
+                        </div>
+                        <div className="mb-5">
+                            Berdasarkan Jenis Kelamin
+                        </div>
+                    </div>
+                </div>
+                <div className="mb-5">
+                    <div className={CLASS_FIELD_LABEL}>
+                        Keperluan
+                    </div>
+                    <SelectSimple
+                        onChange={(obj)=>updateData("kun_keperluan", obj.value)}
+                        selected={keperluanList.find(s=>s.value === loket.kun_keperluan)}
+                        options={keperluanList}
+                    />
+                </div>
+                <div className="mb-5">
+                    <div className={CLASS_FIELD_LABEL}>
+                        Pembayaran
+                    </div>
+                    <SelectSimple
+                        onChange={(obj)=>updateData("kun_pembayaran", obj.value)}
+                        selected={pembayaranList.find(s=>s.value === loket.kun_pembayaran)}
+                        options={pembayaranList}
+                    />
+                </div>
+                <div className="mb-5">
+                    <div className={CLASS_FIELD_LABEL}>
+                        Mitra
+                    </div>
+                    <SelectSimple
+                        onChange={(obj)=>updateData("kun_mitra", obj.value)}
+                        selected={mitraList.find(s=>s.value === loket.kun_mitra)}
+                        options={mitraList}
+                        disabled={true}
+                    />
+                </div>
+                <div className="mb-5">
+                    <div className={CLASS_FIELD_LABEL}>
+                        No Asuransi
+                    </div>
+                    <div className="relative">
+                        <Cleave type="text" className={CLASS_TEXTFIELD}
+                            onChange={(e)=>updateData("kun_noasuransi", e.target.value)}
+                            value={loket.kun_noasuransi}
+                            rows={5}
+                        />
+                    </div>
+                </div>
+                <div className="mb-5">
+                    <div className={CLASS_FIELD_LABEL}>
+                        Rujukan
+                    </div>
+                    <SelectSimple
+                        onChange={(obj)=>updateData("kun_rujukan", obj.value)}
+                        selected={rujukanList.find(s=>s.value === loket.kun_rujukan)}
+                        options={rujukanList}
+                        menuPlacement="top"
+                    />
+                </div>
+            </div>
+            <ButtonBlock
+                onClick={()=>handleSave(loket)}
+                title="Simpan Data"
+                bgColor="bg-lime-500"
+                bgHoverColor="hover:bg-lime-600"
+                icon="IoSaveOutline"
+                disabled = {!canSave}
+                loading={loading}
+            />
+        </div>
+        
+    </div>)
+}

@@ -1,0 +1,6 @@
+{
+  "appId": "com.reendoo.rhocs",
+  "appName": "RhoCS Mobile",
+  "webDir": "build",
+  "bundledWebRuntime": false
+}
